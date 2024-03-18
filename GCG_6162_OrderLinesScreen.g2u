@@ -1,0 +1,102 @@
+Program.Sub.Preflight.Start
+Program.External.Include.Library("GCG_6162_ErrorHandling.lib")
+V.Global.sCustCheck.Declare
+V.Global.sUserField1.Declare
+V.Global.sUserField1Label.Declare
+V.Global.sProductLine.Declare
+V.Global.sCustCheck.Set("104526")
+V.Global.sUserField1.Set("FB Stock*!*FH Stock*!*Micron*!*Fuses - Padmount*!*Parts*!*EMR - Motors")
+F.Intrinsic.String.Split(V.Global.sUserField1,"*!*",V.Global.sUserField1)
+V.Global.sUserField1Label.Set("Product Type")
+V.Global.sProductLine.Set("9A")
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'Author: BixRB
+'Date: 30 Oct 2020
+'Electro-Mechanical Corporation
+'GCG_6162_OrderLinesScreen.g2u
+'Modify how Order Lines Screen behaves when an order is for Customer 104526
+'NOTE: I put all the hardcoded values in the Preflight subroutine. Either add elements to the User Field 1 List or change the Customer Number/User Field 1 Label
+V.Local.sOrderNo.Declare
+V.Local.sUserField1.Declare
+V.Local.sMessage.Declare
+V.Local.iCnt.Declare
+V.Local.bUserField1.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.Control.SelectCase(V.Caller.Hook)
+	F.Intrinsic.Control.Case(12010)
+		'Order Lines Screen OES0201I Populate Hook
+		'000060 - Order Number (unpadded)
+		'000078 - User Field 1 Label
+		F.Intrinsic.String.LPad(V.Passed.000060,"0",7,V.Local.sOrderNo)
+		F.Intrinsic.Control.CallSub(GetCustNo,"OrderNo",V.Local.sOrderNo)
+		'V.Args.Cust
+		F.Intrinsic.Control.If(V.Args.Cust,=,V.Global.sCustCheck)
+			V.Passed.000078.Set(V.Global.sUserField1Label)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Case(12230)
+		'Order Lines Screen OES0201I Pre-Save Hook
+		'000013 - Product Line
+		'000060 - Order Number (unpadded)
+		'000077 - User Field 1
+		'777777 - Override
+		F.Intrinsic.String.LPad(V.Passed.000060,"0",7,V.Local.sOrderNo)
+		F.Intrinsic.Control.CallSub(GetCustNo,"OrderNo",V.Local.sOrderNo)
+		'V.Args.Cust
+		F.Intrinsic.Control.If(V.Args.Cust,=,V.Global.sCustCheck)
+			V.Local.sUserField1.Set(V.Passed.000077.Trim)
+			V.Local.bUserField1.Set(False)
+			'Check User Field 1 value (not case sensitive on input but the V.Passed.000077.Set verifies that the value is in the proper format)
+			F.Intrinsic.Control.For(V.Local.iCnt,0,V.Global.sUserField1.UBound,1)
+				F.Intrinsic.Control.If(V.Local.sUserField1.UCase,=,V.Global.sUserField1(V.Local.iCnt).UCase)
+					V.Passed.000013.Set(V.Global.sProductLine)
+					V.Passed.000077.Set(V.Global.sUserField1(V.Local.iCnt))
+					V.Local.bUserField1.Set(True)
+				F.Intrinsic.Control.EndIf
+			F.Intrinsic.Control.Next(V.Local.iCnt)
+			F.Intrinsic.Control.If(V.Local.bUserField1.Not)
+				'Cancel Savej
+				V.Passed.777777.Set(1)
+				'Display Message Box to let user know they need to change User Field 1
+				F.Intrinsic.String.Build("Could not save. '{1}' needs to be one of the following:{0}",V.Ambient.NewLine,V.Global.sUserField1Label,V.Local.sMessage)
+				F.Intrinsic.Control.For(V.Local.iCnt,0,V.Global.sUserField1.UBound,1)
+					F.Intrinsic.String.Build("{0}{1}{2}",V.Local.sMessage,V.Ambient.NewLine,V.Global.sUserField1(V.Local.iCnt),V.Local.sMessage)
+				F.Intrinsic.Control.Next(V.Local.iCnt)
+				F.Intrinsic.UI.Msgbox(V.Local.sMessage,"SAVE CANCELLED")
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndSelect
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMessage,"ScriptFile",V.Caller.ScriptFile,"CurrentSubroutine",V.Ambient.CurrentSubroutine)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.GetCustNo.Start
+'V.Args.OrderNo
+V.Local.sSQL.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.String.Build("select CUSTOMER from V_ORDER_HEADER where ORDER_NO = '{0}';",V.Args.OrderNo,V.Local.sSQL)
+F.ODBC.Connection!con.OpenCompanyConnection
+F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sSQL)
+F.ODBC.Connection!con.Close
+F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF)
+	F.Intrinsic.Variable.AddRV("Cust","***CUSTNOTFOUND***")
+F.Intrinsic.Control.Else
+	F.Intrinsic.Variable.AddRV("Cust",V.Local.sSQL)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMessage,"ScriptFile",V.Caller.ScriptFile,"CurrentSubroutine",V.Ambient.CurrentSubroutine)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.GetCustNo.End
+
+Program.Sub.Comments.Start
+${$5$}$3.0.0.0$}$1
+${$6$}$bbaker$}$20201030115933725$}$pM7xsHplA2E9VCTenDTJ47gi1rF/t66WgqNPoPT928VBN6x2gZ/0LutELmfm3deYeUjGBkkYgOw=
+Program.Sub.Comments.End
